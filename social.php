@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
     $username = $session->username;
 
     if ($action == "post") {
-        $content = trim(isset($_POST['content']) ? $_POST['content'] : "");
+        $content = isset($_POST['content']) && is_string($_POST['content']) ? trim($_POST['content']) : "";
         if ($content === "" || strlen($content) > 5000) {
             die("Įrašo tekstas privalo būti nuo 1 iki 5000 simbolių.");
         }
@@ -24,8 +24,9 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                 "ssi", array($username, $content, time()));
         $tab = "feed";
     } else if ($action == "comment") {
-        $postId = isset($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
-        $content = trim(isset($_POST['content']) ? $_POST['content'] : "");
+        $postId = isset($_POST['post_id']) && is_string($_POST['post_id']) &&
+                ctype_digit($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
+        $content = isset($_POST['content']) && is_string($_POST['content']) ? trim($_POST['content']) : "";
         if ($postId < 1 || $content === "" || strlen($content) > 2000 ||
                 !socialFetchOne("SELECT id FROM social_posts WHERE id = ?", "i", array($postId))) {
             die("Komentaro duomenys netinkami.");
@@ -34,7 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                 "issi", array($postId, $username, $content, time()));
         $tab = "feed";
     } else if ($action == "react") {
-        $postId = isset($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
+        $postId = isset($_POST['post_id']) && is_string($_POST['post_id']) &&
+                ctype_digit($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
         if ($postId < 1 ||
                 !socialFetchOne("SELECT id FROM social_posts WHERE id = ?", "i", array($postId))) {
             die("Įrašas nerastas.");
@@ -44,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                 "isi", array($postId, $username, time()));
         $tab = "feed";
     } else if ($action == "follow" || $action == "unfollow") {
-        $target = isset($_POST['target']) ? trim($_POST['target']) : "";
+        $target = isset($_POST['target']) && is_string($_POST['target']) ? trim($_POST['target']) : "";
         if ($target === "" || $target == $username ||
                 !socialFetchOne("SELECT username FROM users WHERE username = ?", "s", array($target))) {
             die("Vartotojas nerastas arba jo sekti negalima.");
@@ -59,9 +61,9 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         header("Location: userinfo.php?user=" . urlencode($target));
         exit;
     } else if ($action == "profile") {
-        $firstName = trim(isset($_POST['first_name']) ? $_POST['first_name'] : "");
-        $lastName = trim(isset($_POST['last_name']) ? $_POST['last_name'] : "");
-        $bio = trim(isset($_POST['bio']) ? $_POST['bio'] : "");
+        $firstName = isset($_POST['first_name']) && is_string($_POST['first_name']) ? trim($_POST['first_name']) : "";
+        $lastName = isset($_POST['last_name']) && is_string($_POST['last_name']) ? trim($_POST['last_name']) : "";
+        $bio = isset($_POST['bio']) && is_string($_POST['bio']) ? trim($_POST['bio']) : "";
         if (strlen($firstName) > 80 || strlen($lastName) > 80 || strlen($bio) > 1000) {
             die("Profilio laukai per ilgi.");
         }
@@ -69,8 +71,8 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                 "ssss", array($firstName, $lastName, $bio, $username));
         $tab = "profile";
     } else if ($action == "message") {
-        $recipient = isset($_POST['recipient']) ? trim($_POST['recipient']) : "";
-        $content = trim(isset($_POST['content']) ? $_POST['content'] : "");
+        $recipient = isset($_POST['recipient']) && is_string($_POST['recipient']) ? trim($_POST['recipient']) : "";
+        $content = isset($_POST['content']) && is_string($_POST['content']) ? trim($_POST['content']) : "";
         if ($recipient === "" || $recipient == $username || $content === "" ||
                 strlen($content) > 5000 ||
                 !socialFetchOne("SELECT username FROM users WHERE username = ?", "s", array($recipient))) {
@@ -80,7 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                 "sssi", array($username, $recipient, $content, time()));
         $tab = "messages";
     } else if ($action == "delete_post") {
-        $postId = isset($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
+        $postId = isset($_POST['post_id']) && is_string($_POST['post_id']) &&
+                ctype_digit($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
         $post = socialFetchOne("SELECT username FROM social_posts WHERE id = ?", "i", array($postId));
         if (!$post || ($post['username'] != $username && !socialIsModerator())) {
             header("HTTP/1.1 403 Forbidden");
@@ -91,7 +94,8 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         socialExecute("DELETE FROM social_posts WHERE id = ?", "i", array($postId));
         $tab = socialIsModerator() ? "moderation" : "feed";
     } else if ($action == "delete_comment") {
-        $commentId = isset($_POST['comment_id']) ? (int) $_POST['comment_id'] : 0;
+        $commentId = isset($_POST['comment_id']) && is_string($_POST['comment_id']) &&
+                ctype_digit($_POST['comment_id']) ? (int) $_POST['comment_id'] : 0;
         $comment = socialFetchOne("SELECT username FROM social_comments WHERE id = ?", "i", array($commentId));
         if (!$comment || ($comment['username'] != $username && !socialIsModerator())) {
             header("HTTP/1.1 403 Forbidden");
@@ -100,7 +104,8 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         socialExecute("DELETE FROM social_comments WHERE id = ?", "i", array($commentId));
         $tab = socialIsModerator() ? "moderation" : "feed";
     } else if ($action == "delete_message") {
-        $messageId = isset($_POST['message_id']) ? (int) $_POST['message_id'] : 0;
+        $messageId = isset($_POST['message_id']) && is_string($_POST['message_id']) &&
+                ctype_digit($_POST['message_id']) ? (int) $_POST['message_id'] : 0;
         $message = socialFetchOne("SELECT sender, recipient FROM social_messages WHERE id = ?", "i", array($messageId));
         if (!$message || ($message['sender'] != $username && $message['recipient'] != $username &&
                 !socialIsModerator())) {
@@ -227,8 +232,8 @@ $pageTitle = "Socialinis tinklas";
             <button type="submit">Ieškoti</button>
         </form>
         <?php
-        $firstName = trim(isset($_GET['first_name']) ? $_GET['first_name'] : "");
-        $lastName = trim(isset($_GET['last_name']) ? $_GET['last_name'] : "");
+        $firstName = isset($_GET['first_name']) && is_string($_GET['first_name']) ? trim($_GET['first_name']) : "";
+        $lastName = isset($_GET['last_name']) && is_string($_GET['last_name']) ? trim($_GET['last_name']) : "";
         if ($firstName !== "" || $lastName !== "") {
             $users = socialFetchAll("SELECT username, first_name, last_name FROM users "
                     . "WHERE first_name LIKE ? AND last_name LIKE ? ORDER BY first_name, last_name LIMIT 100",
@@ -255,7 +260,7 @@ $pageTitle = "Socialinis tinklas";
                 <?php socialPostForm("message", "messages", array()); ?>
                     <label>Gavėjas (vartotojo vardas)
                         <input type="text" name="recipient" maxlength="30" required
-                               value="<?php echo socialEscape(isset($_GET['to']) ? $_GET['to'] : ""); ?>">
+                               value="<?php echo socialEscape(isset($_GET['to']) && is_string($_GET['to']) ? $_GET['to'] : ""); ?>">
                     </label><br>
                     <textarea name="content" maxlength="5000" required></textarea><br>
                     <button type="submit">Siųsti</button>

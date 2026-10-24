@@ -8,6 +8,10 @@ class Form {
 
     /* Class constructor */
 
+    function __construct() {
+        $this->Form();
+    }
+
     function Form() {
         /**
          * Get form value and error arrays, used when there

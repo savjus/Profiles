@@ -13,10 +13,14 @@ class MySQLDB {
 
     /* Class constructor */
 
+    function __construct() {
+        $this->MySQLDB();
+    }
+
     function MySQLDB() {
         /* Make connection to database */
         $this->connection = mysqli_connect(DB_SERVER, DB_USER, DB_PASS, DB_NAME)
-                or die(mysql_error() . '<br><h1>Faile include/constants.php suveskite savo MySQLDB duomenis.</h1>');
+                or die(mysqli_connect_error() . '<br><h1>Faile include/constants.php suveskite savo MySQLDB duomenis.</h1>');
 
         /**
          * Only query database to find out number of members
@@ -44,9 +48,7 @@ class MySQLDB {
      */
     function confirmUserPass($username, $password) {
         /* Add slashes if necessary (for query) */
-        if (!get_magic_quotes_gpc()) {
-            $username = addslashes($username);
-        }
+        $username = mysqli_real_escape_string($this->connection, $username);
 
         /* Verify that user is in database */
         $q = "SELECT password FROM " . TBL_USERS . " WHERE username = '$username'";
@@ -78,9 +80,7 @@ class MySQLDB {
      */
     function confirmUserID($username, $userid) {
         /* Add slashes if necessary (for query) */
-        if (!get_magic_quotes_gpc()) {
-            $username = addslashes($username);
-        }
+        $username = mysqli_real_escape_string($this->connection, $username);
 
         /* Verify that user is in database */
         $q = "SELECT userid FROM " . TBL_USERS . " WHERE username = '$username'";
@@ -107,9 +107,7 @@ class MySQLDB {
      * been taken by another user, false otherwise.
      */
     function usernameTaken($username) {
-        if (!get_magic_quotes_gpc()) {
-            $username = addslashes($username);
-        }
+        $username = mysqli_real_escape_string($this->connection, $username);
         $q = "SELECT username FROM " . TBL_USERS . " WHERE username = '$username'";
         $result = mysqli_query($this->connection, $q);
         return (mysqli_num_rows($result) > 0);
@@ -120,9 +118,7 @@ class MySQLDB {
      * been banned by the administrator.
      */
     function usernameBanned($username) {
-        if (!get_magic_quotes_gpc()) {
-            $username = addslashes($username);
-        }
+        $username = mysqli_real_escape_string($this->connection, $username);
         $q = "SELECT username FROM " . TBL_BANNED_USERS . " WHERE username = '$username'";
         $result = mysqli_query($this->connection, $q);
         return (mysqli_num_rows($result) > 0);

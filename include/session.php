@@ -22,6 +22,10 @@ class Session {
      */
     /* Class constructor */
 
+    function __construct() {
+        $this->Session();
+    }
+
     function Session() {
         $this->time = time();
         $this->startSession();
