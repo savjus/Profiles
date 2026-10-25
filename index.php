@@ -12,10 +12,9 @@ include("include/session.php");
             <center><img src="pictures/top.png"/></center>
         </td></tr><tr><td>  
             <?php
-            echo '<p><a href="social.php">Apsilankyti socialiniame tinkle</a></p>';
+            include("include/meniu.php");
             //Jei vartotojas prisijungęs
             if ($session->logged_in) {
-                include("include/meniu.php");
                 ?>
                 <div style="text-align: center;color:green">
                     <br><br>

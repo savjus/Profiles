@@ -41,10 +41,15 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                 !socialFetchOne("SELECT id FROM social_posts WHERE id = ?", "i", array($postId))) {
             die("Įrašas nerastas.");
         }
-        socialExecute("INSERT INTO social_reactions (post_id, username, reaction, created_at) VALUES (?, ?, 'patinka', ?) "
-                . "ON DUPLICATE KEY UPDATE reaction = VALUES(reaction), created_at = VALUES(created_at)",
-                "isi", array($postId, $username, time()));
-        $tab = "feed";
+        $reaction = socialFetchOne("SELECT username FROM social_reactions WHERE post_id = ? AND username = ?",
+                "is", array($postId, $username));
+        if ($reaction) {
+            socialExecute("DELETE FROM social_reactions WHERE post_id = ? AND username = ?",
+                    "is", array($postId, $username));
+        } else {
+            socialExecute("INSERT INTO social_reactions (post_id, username, reaction, created_at) VALUES (?, ?, 'patinka', ?)",
+                    "isi", array($postId, $username, time()));
+        }
     } else if ($action == "follow" || $action == "unfollow") {
         $target = isset($_POST['target']) && is_string($_POST['target']) ? trim($_POST['target']) : "";
         if ($target === "" || $target == $username ||
@@ -136,19 +141,6 @@ $pageTitle = "Socialinis tinklas";
 <table class="center"><tr><td>
     <center><img src="pictures/top.png" alt=""></center>
     <?php include("include/meniu.php"); ?>
-    <nav class="social-nav">
-        <a href="index.php"><?php echo $session->logged_in ? "Pradžia" : "Prisijungti"; ?></a> |
-        <a href="social.php?tab=feed">Įrašai</a> |
-        <a href="social.php?tab=search">Vartotojų paieška</a>
-        <?php if ($session->logged_in) { ?>
-            | <a href="social.php?tab=following">Sekami vartotojai</a>
-            | <a href="social.php?tab=messages">Žinutės</a>
-            | <a href="social.php?tab=profile">Mano profilis</a>
-            <?php if (socialIsModerator()) { ?>
-                | <a href="social.php?tab=moderation">Turinio priežiūra</a>
-            <?php } ?>
-        <?php } ?>
-    </nav>
     <?php if (isset($_GET['saved'])) { ?><p class="social-notice">Pakeitimai išsaugoti.</p><?php } ?>
     <?php if ($tab == "feed" || $tab == "following") { ?>
         <h1><?php echo $tab == "following" ? "Sekamų vartotojų įrašai" : "Naujausi įrašai"; ?></h1>
@@ -167,16 +159,18 @@ $pageTitle = "Socialinis tinklas";
             <?php
             if ($tab == "following") {
                 $posts = socialFetchAll("SELECT p.id, p.username, p.content, p.created_at, u.first_name, u.last_name, "
-                        . "(SELECT COUNT(*) FROM social_reactions r WHERE r.post_id = p.id) AS reaction_count "
+                        . "(SELECT COUNT(*) FROM social_reactions r WHERE r.post_id = p.id) AS reaction_count, "
+                        . "(SELECT COUNT(*) FROM social_reactions r WHERE r.post_id = p.id AND r.username = ?) AS user_reacted "
                         . "FROM social_posts p JOIN users u ON u.username = p.username "
                         . "WHERE p.username = ? OR p.username IN (SELECT followed FROM social_follows WHERE follower = ?) "
                         . "ORDER BY p.created_at DESC LIMIT 50",
-                        "ss", array($session->username, $session->username));
+                        "sss", array($session->username, $session->username, $session->username));
             } else {
                 $posts = socialFetchAll("SELECT p.id, p.username, p.content, p.created_at, u.first_name, u.last_name, "
-                        . "(SELECT COUNT(*) FROM social_reactions r WHERE r.post_id = p.id) AS reaction_count "
+                        . "(SELECT COUNT(*) FROM social_reactions r WHERE r.post_id = p.id) AS reaction_count, "
+                        . "(SELECT COUNT(*) FROM social_reactions r WHERE r.post_id = p.id AND r.username = ?) AS user_reacted "
                         . "FROM social_posts p JOIN users u ON u.username = p.username ORDER BY p.created_at DESC LIMIT 50",
-                        "", array());
+                        "s", array($session->username));
             }
             if (!count($posts)) {
                 echo "<p>Įrašų dar nėra.</p>";
@@ -193,8 +187,8 @@ $pageTitle = "Socialinis tinklas";
                     <p class="social-content"><?php echo nl2br(socialEscape($post['content'])); ?></p>
                     <p><?php echo (int) $post['reaction_count']; ?> patinka</p>
                     <?php if ($session->logged_in) { ?>
-                        <?php socialPostForm("react", "feed", array("post_id" => $post['id'])); ?>
-                            <button type="submit">Patinka</button>
+                        <?php socialPostForm("react", $tab, array("post_id" => $post['id'])); ?>
+                            <button type="submit"><?php echo $post['user_reacted'] ? "Atšaukti „Patinka“" : "Patinka"; ?></button>
                         </form>
                     <?php } ?>
                     <?php foreach ($comments as $comment) { ?>

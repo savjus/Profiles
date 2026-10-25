@@ -14,7 +14,8 @@ if ($session->logged_in) {
             <table class="center"><tr><td>
                         <img src="pictures/top.png"/>
                     </td></tr><tr><td> 
-                        <table style="border-width: 2px; border-style: dotted;"><tr><td>
+                <?php include("include/meniu.php"); ?>
+                <table style="border-width: 2px; border-style: dotted;"><tr><td>
                                     Atgal į [<a href="index.php">Pradžia</a>]
                                 </td></tr></table>               
                         <?php
