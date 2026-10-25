@@ -1,4 +1,5 @@
--- Run once on an existing vartvalds database to add the social network schema.
+-- Optional manual migration for an existing database. PHP applies this schema automatically on first request.
+-- Run this file only if automatic initialization is not being used.
 ALTER TABLE `users`
   ADD COLUMN `first_name` varchar(80) NOT NULL DEFAULT '',
   ADD COLUMN `last_name` varchar(80) NOT NULL DEFAULT '',

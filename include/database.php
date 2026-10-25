@@ -18,9 +18,32 @@ class MySQLDB {
     }
 
     function MySQLDB() {
-        /* Make connection to database */
-        $this->connection = mysqli_connect(DB_SERVER, DB_USER, DB_PASS, DB_NAME)
-                or die(mysqli_connect_error() . '<br><h1>Faile include/constants.php suveskite savo MySQLDB duomenis.</h1>');
+        if (function_exists("mysqli_report")) {
+            mysqli_report(MYSQLI_REPORT_OFF);
+        }
+        $this->connection = mysqli_connect(DB_SERVER, DB_USER, DB_PASS);
+        if (!$this->connection) {
+            die("Nepavyko prisijungti prie MySQL: "
+                    . htmlspecialchars(mysqli_connect_error(), ENT_QUOTES, "UTF-8"));
+        }
+        if (DB_NAME === "" || strpos(DB_NAME, "\0") !== false) {
+            die("DB_NAME reikšmė faile include/constants.php yra netinkama.");
+        }
+        $quotedDatabase = "`" . str_replace("`", "``", DB_NAME) . "`";
+        $created = mysqli_query($this->connection, "CREATE DATABASE IF NOT EXISTS " . $quotedDatabase
+                . " CHARACTER SET utf8 COLLATE utf8_general_ci");
+        $createError = $created ? "" : mysqli_error($this->connection);
+        if (!mysqli_select_db($this->connection, DB_NAME)) {
+            die("Nepavyko atidaryti duomenų bazės. Patikrinkite DB_NAME ir MySQL teises "
+                    . "(CREATE DATABASE naujai DB, CREATE/ALTER lentelėms): "
+                    . htmlspecialchars($createError . " " . mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+        }
+        if (!mysqli_set_charset($this->connection, "utf8")) {
+            die("Nepavyko nustatyti MySQL UTF-8 koduotės: "
+                    . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+        }
+
+        $this->initializeSchema();
 
         /**
          * Only query database to find out number of members
@@ -36,6 +59,243 @@ class MySQLDB {
             /* Calculate number of guests at site */
             $this->calcNumActiveGuests();
         }
+    }
+
+    function initializeSchema() {
+        if (!mysqli_query($this->connection, "CREATE TABLE IF NOT EXISTS `app_migrations` (
+                `version` varchar(64) NOT NULL,
+                `applied_at` int(10) unsigned NOT NULL,
+                PRIMARY KEY (`version`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8")) {
+            die("Nepavyko paruošti migracijų žurnalo: "
+                    . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+        }
+        $versionResult = mysqli_query($this->connection,
+                "SELECT version FROM `app_migrations` WHERE version = 'profiles_social_v1'");
+        if (!$versionResult) {
+            die("Nepavyko patikrinti migracijos būsenos: "
+                    . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+        }
+        $alreadyMigrated = mysqli_num_rows($versionResult) > 0;
+        mysqli_free_result($versionResult);
+
+        $expectedTables = array(
+            TBL_USERS,
+            TBL_ACTIVE_USERS,
+            TBL_ACTIVE_GUESTS,
+            TBL_BANNED_USERS,
+            "social_posts",
+            "social_comments",
+            "social_reactions",
+            "social_follows",
+            "social_messages"
+        );
+        $tableResult = mysqli_query($this->connection, "SHOW TABLES");
+        if (!$tableResult) {
+            die("Nepavyko patikrinti duomenų bazės lentelių: "
+                    . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+        }
+        $existingTables = array();
+        while ($table = mysqli_fetch_row($tableResult)) {
+            $existingTables[$table[0]] = true;
+        }
+        mysqli_free_result($tableResult);
+
+        $schemaComplete = true;
+        foreach ($expectedTables as $tableName) {
+            if (!isset($existingTables[$tableName])) {
+                $schemaComplete = false;
+                break;
+            }
+        }
+        if ($schemaComplete) {
+            $columnResult = mysqli_query($this->connection, "SHOW COLUMNS FROM `" . TBL_USERS . "`");
+            if (!$columnResult) {
+                die("Nepavyko patikrinti vartotojų lentelės: "
+                        . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+            }
+            $existingColumns = array();
+            while ($column = mysqli_fetch_assoc($columnResult)) {
+                $existingColumns[$column['Field']] = true;
+            }
+            mysqli_free_result($columnResult);
+            foreach (array("first_name", "last_name", "bio") as $columnName) {
+                if (!isset($existingColumns[$columnName])) {
+                    $schemaComplete = false;
+                    break;
+                }
+            }
+        }
+        if ($alreadyMigrated && $schemaComplete) {
+            return;
+        }
+
+        $seedDemoUsers = !isset($existingTables[TBL_USERS]);
+        $tables = array(
+            "CREATE TABLE IF NOT EXISTS `" . TBL_ACTIVE_GUESTS . "` (
+                `ip` varchar(45) NOT NULL,
+                `timestamp` int(11) unsigned NOT NULL,
+                PRIMARY KEY (`ip`)
+            ) ENGINE=MyISAM DEFAULT CHARSET=utf8",
+            "CREATE TABLE IF NOT EXISTS `" . TBL_ACTIVE_USERS . "` (
+                `username` varchar(30) NOT NULL,
+                `timestamp` int(11) unsigned NOT NULL,
+                PRIMARY KEY (`username`)
+            ) ENGINE=MyISAM DEFAULT CHARSET=utf8",
+            "CREATE TABLE IF NOT EXISTS `" . TBL_BANNED_USERS . "` (
+                `username` varchar(30) NOT NULL,
+                `timestamp` int(11) unsigned NOT NULL,
+                PRIMARY KEY (`username`)
+            ) ENGINE=MyISAM DEFAULT CHARSET=utf8",
+            "CREATE TABLE IF NOT EXISTS `" . TBL_USERS . "` (
+                `username` varchar(30) NOT NULL,
+                `password` varchar(32) DEFAULT NULL,
+                `userid` varchar(32) DEFAULT NULL,
+                `userlevel` tinyint(1) unsigned NOT NULL,
+                `email` varchar(50) DEFAULT NULL,
+                `timestamp` int(11) unsigned NOT NULL,
+                `first_name` varchar(80) NOT NULL DEFAULT '',
+                `last_name` varchar(80) NOT NULL DEFAULT '',
+                `bio` varchar(1000) NOT NULL DEFAULT '',
+                PRIMARY KEY (`username`)
+            ) ENGINE=MyISAM DEFAULT CHARSET=utf8",
+            "CREATE TABLE IF NOT EXISTS `social_posts` (
+                `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+                `username` varchar(30) NOT NULL,
+                `content` text NOT NULL,
+                `created_at` int(10) unsigned NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `social_posts_created` (`created_at`),
+                KEY `social_posts_username` (`username`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8",
+            "CREATE TABLE IF NOT EXISTS `social_comments` (
+                `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+                `post_id` int(10) unsigned NOT NULL,
+                `username` varchar(30) NOT NULL,
+                `content` text NOT NULL,
+                `created_at` int(10) unsigned NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `social_comments_post` (`post_id`),
+                KEY `social_comments_created` (`created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8",
+            "CREATE TABLE IF NOT EXISTS `social_reactions` (
+                `post_id` int(10) unsigned NOT NULL,
+                `username` varchar(30) NOT NULL,
+                `reaction` varchar(20) NOT NULL,
+                `created_at` int(10) unsigned NOT NULL,
+                PRIMARY KEY (`post_id`, `username`),
+                KEY `social_reactions_username` (`username`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8",
+            "CREATE TABLE IF NOT EXISTS `social_follows` (
+                `follower` varchar(30) NOT NULL,
+                `followed` varchar(30) NOT NULL,
+                `created_at` int(10) unsigned NOT NULL,
+                PRIMARY KEY (`follower`, `followed`),
+                KEY `social_follows_followed` (`followed`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8",
+            "CREATE TABLE IF NOT EXISTS `social_messages` (
+                `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+                `sender` varchar(30) NOT NULL,
+                `recipient` varchar(30) NOT NULL,
+                `content` text NOT NULL,
+                `created_at` int(10) unsigned NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `social_messages_sender` (`sender`),
+                KEY `social_messages_recipient` (`recipient`),
+                KEY `social_messages_created` (`created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8"
+        );
+        foreach ($tables as $query) {
+            if (!mysqli_query($this->connection, $query)) {
+                die("Nepavyko sukurti duomenų bazės lentelių: "
+                        . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+            }
+        }
+
+        $profileColumns = array(
+            "first_name" => "varchar(80) NOT NULL DEFAULT ''",
+            "last_name" => "varchar(80) NOT NULL DEFAULT ''",
+            "bio" => "varchar(1000) NOT NULL DEFAULT ''"
+        );
+        foreach ($profileColumns as $column => $definition) {
+            $result = mysqli_query($this->connection,
+                    "SHOW COLUMNS FROM `" . TBL_USERS . "` LIKE '" . $column . "'");
+            if (!$result) {
+                die("Nepavyko patikrinti vartotojų lentelės: "
+                        . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+            }
+            $exists = mysqli_num_rows($result) > 0;
+            mysqli_free_result($result);
+            if (!$exists && !mysqli_query($this->connection,
+                    "ALTER TABLE `" . TBL_USERS . "` ADD COLUMN `" . $column . "` " . $definition)) {
+                $error = mysqli_error($this->connection);
+                $check = mysqli_query($this->connection,
+                        "SHOW COLUMNS FROM `" . TBL_USERS . "` LIKE '" . $column . "'");
+                $addedByConcurrentRequest = $check && mysqli_num_rows($check) > 0;
+                if ($check) {
+                    mysqli_free_result($check);
+                }
+                if (!$addedByConcurrentRequest) {
+                    die("Nepavyko atnaujinti vartotojų lentelės: "
+                            . htmlspecialchars($error, ENT_QUOTES, "UTF-8"));
+                }
+            }
+        }
+
+        if (!$seedDemoUsers) {
+            $userCountResult = mysqli_query($this->connection, "SELECT COUNT(*) FROM `" . TBL_USERS . "`");
+            if (!$userCountResult) {
+                die("Nepavyko patikrinti demo vartotojų: "
+                        . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+            }
+            $userCount = mysqli_fetch_row($userCountResult);
+            mysqli_free_result($userCountResult);
+            $seedDemoUsers = (int) $userCount[0] === 0;
+        }
+
+        if ($seedDemoUsers) {
+            $demoUsers = array(
+                array("Valdytojas", "7ed2b87b255a0348b61226bd7c2ed5b4", MANAGER_LEVEL, 1330553708),
+                array("Administratorius", "a2fe399900de341c39c632244eaf8483", ADMIN_LEVEL, 1330553956),
+                array("Vartotojas", "9a47f4552955b91bcd8850d73b00e703", USER_LEVEL, 1330553730)
+            );
+            $statement = mysqli_prepare($this->connection,
+                    "INSERT IGNORE INTO `" . TBL_USERS . "` "
+                    . "(username, password, userid, userlevel, email, timestamp) VALUES (?, ?, ?, ?, ?, ?)");
+            if (!$statement) {
+                die("Nepavyko paruošti pradinių demo duomenų: "
+                        . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+            }
+            $password = md5("demo");
+            $email = "demo@ktu.lt";
+            foreach ($demoUsers as $user) {
+                $username = $user[0];
+                $userid = $user[1];
+                $userlevel = $user[2];
+                $timestamp = $user[3];
+                if (!mysqli_stmt_bind_param($statement, "sssisi",
+                        $username, $password, $userid, $userlevel, $email, $timestamp) ||
+                        !mysqli_stmt_execute($statement)) {
+                    die("Nepavyko sukurti pradinių demo vartotojų: "
+                            . htmlspecialchars(mysqli_stmt_error($statement), ENT_QUOTES, "UTF-8"));
+                }
+            }
+            mysqli_stmt_close($statement);
+        }
+
+        $migration = mysqli_prepare($this->connection,
+                "INSERT IGNORE INTO `app_migrations` (version, applied_at) VALUES ('profiles_social_v1', ?)");
+        if (!$migration) {
+            die("Nepavyko užbaigti duomenų bazės migracijos: "
+                    . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+        }
+        $appliedAt = time();
+        if (!mysqli_stmt_bind_param($migration, "i", $appliedAt) ||
+                !mysqli_stmt_execute($migration)) {
+            die("Nepavyko užregistruoti migracijos: "
+                    . htmlspecialchars(mysqli_stmt_error($migration), ENT_QUOTES, "UTF-8"));
+        }
+        mysqli_stmt_close($migration);
     }
 
     /**

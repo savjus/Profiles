@@ -14,7 +14,8 @@
 define("DB_SERVER", "localhost");
 define("DB_USER", "stud");
 define("DB_PASS", "stud");
-define("DB_NAME", "vartvalds");
+// PHP creates this database and its schema on the first request; DB_USER needs suitable MySQL privileges.
+define("DB_NAME", "social");
 
 /**
  * Database Table Constants - these constants

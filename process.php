@@ -5,6 +5,10 @@ include("include/session.php");
 class Process {
     /* Class constructor */
 
+    function __construct() {
+        $this->Process();
+    }
+
     function Process() {
         global $session;
         /* User submitted login form */
@@ -119,7 +123,7 @@ class Process {
             /* Make sure username is in database */
             $subuser = stripslashes($subuser);
             if (strlen($subuser) < 5 || strlen($subuser) > 30 ||
-                    !eregi("^([0-9a-z])+$", $subuser) ||
+                    !preg_match("/^([0-9a-z])+$/i", $subuser) ||
                     (!$database->usernameTaken($subuser))) {
                 $form->setError($field, "* Vartotojas neegzistuoja<br>");
             }

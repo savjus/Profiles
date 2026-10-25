@@ -5,6 +5,10 @@ include("../include/session.php");
 class AdminProcess {
     /* Class constructor */
 
+    function __construct() {
+        $this->AdminProcess();
+    }
+
     function AdminProcess() {
         global $session;
         /* Make sure administrator is accessing page */

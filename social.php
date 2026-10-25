@@ -137,6 +137,7 @@ $pageTitle = "Socialinis tinklas";
     <center><img src="pictures/top.png" alt=""></center>
     <?php include("include/meniu.php"); ?>
     <nav class="social-nav">
+        <a href="index.php"><?php echo $session->logged_in ? "Pradžia" : "Prisijungti"; ?></a> |
         <a href="social.php?tab=feed">Įrašai</a> |
         <a href="social.php?tab=search">Vartotojų paieška</a>
         <?php if ($session->logged_in) { ?>

@@ -22,7 +22,7 @@ SET SQL_MODE="NO_AUTO_VALUE_ON_ZERO";
 --
 
 CREATE TABLE IF NOT EXISTS `active_guests` (
-  `ip` varchar(15) NOT NULL,
+  `ip` varchar(45) NOT NULL,
   `timestamp` int(11) unsigned NOT NULL,
   PRIMARY KEY (`ip`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS `users` (
 -- Sukurta duomenų kopija lentelei `users`
 --
 
-INSERT INTO `users` (`username`, `password`, `userid`, `userlevel`, `email`, `timestamp`) VALUES
+INSERT IGNORE INTO `users` (`username`, `password`, `userid`, `userlevel`, `email`, `timestamp`) VALUES
 ('Valdytojas', 'fe01ce2a7fbac8fafaed7c982a04e229', '7ed2b87b255a0348b61226bd7c2ed5b4', 5, 'demo@ktu.lt', 1330553708),
 ('Administratorius', 'fe01ce2a7fbac8fafaed7c982a04e229', 'a2fe399900de341c39c632244eaf8483', 9, 'demo@ktu.lt', 1330553956),
 ('Vartotojas', 'fe01ce2a7fbac8fafaed7c982a04e229', '9a47f4552955b91bcd8850d73b00e703', 1, 'demo@ktu.lt', 1330553730);
