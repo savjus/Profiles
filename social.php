@@ -9,120 +9,163 @@ if ($tab == "moderation" && !socialIsModerator()) {
     exit;
 }
 
+function socialHandlePost($username) {
+    $content = isset($_POST['content']) && is_string($_POST['content']) ? trim($_POST['content']) : "";
+    if ($content === "" || strlen($content) > 5000) {
+        die("Įrašo tekstas privalo būti nuo 1 iki 5000 simbolių.");
+    }
+    socialExecute("INSERT INTO social_posts (username, content, created_at) VALUES (?, ?, ?)",
+            "ssi", array($username, $content, time()));
+    return "feed";
+}
+
+function socialHandleComment($username) {
+    $postId = isset($_POST['post_id']) && is_string($_POST['post_id']) &&
+            ctype_digit($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
+    $content = isset($_POST['content']) && is_string($_POST['content']) ? trim($_POST['content']) : "";
+    if ($postId < 1 || $content === "" || strlen($content) > 2000 ||
+            !socialFetchOne("SELECT id FROM social_posts WHERE id = ?", "i", array($postId))) {
+        die("Komentaro duomenys netinkami.");
+    }
+    socialExecute("INSERT INTO social_comments (post_id, username, content, created_at) VALUES (?, ?, ?, ?)",
+            "issi", array($postId, $username, $content, time()));
+    return "feed";
+}
+
+function socialHandleReaction($username) {
+    $postId = isset($_POST['post_id']) && is_string($_POST['post_id']) &&
+            ctype_digit($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
+    if ($postId < 1 ||
+            !socialFetchOne("SELECT id FROM social_posts WHERE id = ?", "i", array($postId))) {
+        die("Įrašas nerastas.");
+    }
+    $reaction = socialFetchOne("SELECT username FROM social_reactions WHERE post_id = ? AND username = ?",
+            "is", array($postId, $username));
+    if ($reaction) {
+        socialExecute("DELETE FROM social_reactions WHERE post_id = ? AND username = ?",
+                "is", array($postId, $username));
+    } else {
+        socialExecute("INSERT INTO social_reactions (post_id, username, reaction, created_at) VALUES (?, ?, 'patinka', ?)",
+                "isi", array($postId, $username, time()));
+    }
+    return "feed";
+}
+
+function socialHandleFollow($username, $action) {
+    $target = isset($_POST['target']) && is_string($_POST['target']) ? trim($_POST['target']) : "";
+    if ($target === "" || $target == $username ||
+            !socialFetchOne("SELECT username FROM users WHERE username = ?", "s", array($target))) {
+        die("Vartotojas nerastas arba jo sekti negalima.");
+    }
+    if ($action == "follow") {
+        socialExecute("INSERT IGNORE INTO social_follows (follower, followed, created_at) VALUES (?, ?, ?)",
+                "ssi", array($username, $target, time()));
+    } else {
+        socialExecute("DELETE FROM social_follows WHERE follower = ? AND followed = ?",
+                "ss", array($username, $target));
+    }
+    header("Location: userinfo.php?user=" . urlencode($target));
+    exit;
+}
+
+function socialHandleProfile($username) {
+    $firstName = isset($_POST['first_name']) && is_string($_POST['first_name']) ? trim($_POST['first_name']) : "";
+    $lastName = isset($_POST['last_name']) && is_string($_POST['last_name']) ? trim($_POST['last_name']) : "";
+    $bio = isset($_POST['bio']) && is_string($_POST['bio']) ? trim($_POST['bio']) : "";
+    if (strlen($firstName) > 80 || strlen($lastName) > 80 || strlen($bio) > 1000) {
+        die("Profilio laukai per ilgi.");
+    }
+    socialExecute("UPDATE users SET first_name = ?, last_name = ?, bio = ? WHERE username = ?",
+            "ssss", array($firstName, $lastName, $bio, $username));
+    return "profile";
+}
+
+function socialHandleMessage($username) {
+    $recipient = isset($_POST['recipient']) && is_string($_POST['recipient']) ? trim($_POST['recipient']) : "";
+    $content = isset($_POST['content']) && is_string($_POST['content']) ? trim($_POST['content']) : "";
+    if ($recipient === "" || $recipient == $username || $content === "" ||
+            strlen($content) > 5000 ||
+            !socialFetchOne("SELECT username FROM users WHERE username = ?", "s", array($recipient))) {
+        die("Žinutės duomenys netinkami.");
+    }
+    socialExecute("INSERT INTO social_messages (sender, recipient, content, created_at) VALUES (?, ?, ?, ?)",
+            "sssi", array($username, $recipient, $content, time()));
+    return "messages";
+}
+
+function socialHandleDeletePost($username) {
+    $postId = isset($_POST['post_id']) && is_string($_POST['post_id']) &&
+            ctype_digit($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
+    $post = socialFetchOne("SELECT username FROM social_posts WHERE id = ?", "i", array($postId));
+    if (!$post || ($post['username'] != $username && !socialIsModerator())) {
+        header("HTTP/1.1 403 Forbidden");
+        die("Neturite teisės pašalinti šio įrašo.");
+    }
+    socialExecute("DELETE FROM social_comments WHERE post_id = ?", "i", array($postId));
+    socialExecute("DELETE FROM social_reactions WHERE post_id = ?", "i", array($postId));
+    socialExecute("DELETE FROM social_posts WHERE id = ?", "i", array($postId));
+    return socialIsModerator() ? "moderation" : "feed";
+}
+
+function socialHandleDeleteComment($username) {
+    $commentId = isset($_POST['comment_id']) && is_string($_POST['comment_id']) &&
+            ctype_digit($_POST['comment_id']) ? (int) $_POST['comment_id'] : 0;
+    $comment = socialFetchOne("SELECT username FROM social_comments WHERE id = ?", "i", array($commentId));
+    if (!$comment || ($comment['username'] != $username && !socialIsModerator())) {
+        header("HTTP/1.1 403 Forbidden");
+        die("Neturite teisės pašalinti šio komentaro.");
+    }
+    socialExecute("DELETE FROM social_comments WHERE id = ?", "i", array($commentId));
+    return socialIsModerator() ? "moderation" : "feed";
+}
+
+function socialHandleDeleteMessage($username) {
+    $messageId = isset($_POST['message_id']) && is_string($_POST['message_id']) &&
+            ctype_digit($_POST['message_id']) ? (int) $_POST['message_id'] : 0;
+    $message = socialFetchOne("SELECT sender, recipient FROM social_messages WHERE id = ?", "i", array($messageId));
+    if (!$message || ($message['sender'] != $username && $message['recipient'] != $username &&
+            !socialIsModerator())) {
+        header("HTTP/1.1 403 Forbidden");
+        die("Neturite teisės pašalinti šios žinutės.");
+    }
+    socialExecute("DELETE FROM social_messages WHERE id = ?", "i", array($messageId));
+    return socialIsModerator() ? "moderation" : "messages";
+}
+
+function socialDispatchAction($action, $username) {
+    switch ($action) {
+        case "post":
+            return socialHandlePost($username);
+        case "comment":
+            return socialHandleComment($username);
+        case "react":
+            return socialHandleReaction($username);
+        case "follow":
+        case "unfollow":
+            socialHandleFollow($username, $action);
+            return "feed";
+        case "profile":
+            return socialHandleProfile($username);
+        case "message":
+            return socialHandleMessage($username);
+        case "delete_post":
+            return socialHandleDeletePost($username);
+        case "delete_comment":
+            return socialHandleDeleteComment($username);
+        case "delete_message":
+            return socialHandleDeleteMessage($username);
+        default:
+            header("HTTP/1.1 400 Bad Request");
+            die("Nežinomas veiksmas.");
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
     socialRequireLogin();
     socialRequireToken();
     $action = isset($_POST['action']) ? $_POST['action'] : "";
     $username = $session->username;
-
-    if ($action == "post") {
-        $content = isset($_POST['content']) && is_string($_POST['content']) ? trim($_POST['content']) : "";
-        if ($content === "" || strlen($content) > 5000) {
-            die("Įrašo tekstas privalo būti nuo 1 iki 5000 simbolių.");
-        }
-        socialExecute("INSERT INTO social_posts (username, content, created_at) VALUES (?, ?, ?)",
-                "ssi", array($username, $content, time()));
-        $tab = "feed";
-    } else if ($action == "comment") {
-        $postId = isset($_POST['post_id']) && is_string($_POST['post_id']) &&
-                ctype_digit($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
-        $content = isset($_POST['content']) && is_string($_POST['content']) ? trim($_POST['content']) : "";
-        if ($postId < 1 || $content === "" || strlen($content) > 2000 ||
-                !socialFetchOne("SELECT id FROM social_posts WHERE id = ?", "i", array($postId))) {
-            die("Komentaro duomenys netinkami.");
-        }
-        socialExecute("INSERT INTO social_comments (post_id, username, content, created_at) VALUES (?, ?, ?, ?)",
-                "issi", array($postId, $username, $content, time()));
-        $tab = "feed";
-    } else if ($action == "react") {
-        $postId = isset($_POST['post_id']) && is_string($_POST['post_id']) &&
-                ctype_digit($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
-        if ($postId < 1 ||
-                !socialFetchOne("SELECT id FROM social_posts WHERE id = ?", "i", array($postId))) {
-            die("Įrašas nerastas.");
-        }
-        $reaction = socialFetchOne("SELECT username FROM social_reactions WHERE post_id = ? AND username = ?",
-                "is", array($postId, $username));
-        if ($reaction) {
-            socialExecute("DELETE FROM social_reactions WHERE post_id = ? AND username = ?",
-                    "is", array($postId, $username));
-        } else {
-            socialExecute("INSERT INTO social_reactions (post_id, username, reaction, created_at) VALUES (?, ?, 'patinka', ?)",
-                    "isi", array($postId, $username, time()));
-        }
-    } else if ($action == "follow" || $action == "unfollow") {
-        $target = isset($_POST['target']) && is_string($_POST['target']) ? trim($_POST['target']) : "";
-        if ($target === "" || $target == $username ||
-                !socialFetchOne("SELECT username FROM users WHERE username = ?", "s", array($target))) {
-            die("Vartotojas nerastas arba jo sekti negalima.");
-        }
-        if ($action == "follow") {
-            socialExecute("INSERT IGNORE INTO social_follows (follower, followed, created_at) VALUES (?, ?, ?)",
-                    "ssi", array($username, $target, time()));
-        } else {
-            socialExecute("DELETE FROM social_follows WHERE follower = ? AND followed = ?",
-                    "ss", array($username, $target));
-        }
-        header("Location: userinfo.php?user=" . urlencode($target));
-        exit;
-    } else if ($action == "profile") {
-        $firstName = isset($_POST['first_name']) && is_string($_POST['first_name']) ? trim($_POST['first_name']) : "";
-        $lastName = isset($_POST['last_name']) && is_string($_POST['last_name']) ? trim($_POST['last_name']) : "";
-        $bio = isset($_POST['bio']) && is_string($_POST['bio']) ? trim($_POST['bio']) : "";
-        if (strlen($firstName) > 80 || strlen($lastName) > 80 || strlen($bio) > 1000) {
-            die("Profilio laukai per ilgi.");
-        }
-        socialExecute("UPDATE users SET first_name = ?, last_name = ?, bio = ? WHERE username = ?",
-                "ssss", array($firstName, $lastName, $bio, $username));
-        $tab = "profile";
-    } else if ($action == "message") {
-        $recipient = isset($_POST['recipient']) && is_string($_POST['recipient']) ? trim($_POST['recipient']) : "";
-        $content = isset($_POST['content']) && is_string($_POST['content']) ? trim($_POST['content']) : "";
-        if ($recipient === "" || $recipient == $username || $content === "" ||
-                strlen($content) > 5000 ||
-                !socialFetchOne("SELECT username FROM users WHERE username = ?", "s", array($recipient))) {
-            die("Žinutės duomenys netinkami.");
-        }
-        socialExecute("INSERT INTO social_messages (sender, recipient, content, created_at) VALUES (?, ?, ?, ?)",
-                "sssi", array($username, $recipient, $content, time()));
-        $tab = "messages";
-    } else if ($action == "delete_post") {
-        $postId = isset($_POST['post_id']) && is_string($_POST['post_id']) &&
-                ctype_digit($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
-        $post = socialFetchOne("SELECT username FROM social_posts WHERE id = ?", "i", array($postId));
-        if (!$post || ($post['username'] != $username && !socialIsModerator())) {
-            header("HTTP/1.1 403 Forbidden");
-            die("Neturite teisės pašalinti šio įrašo.");
-        }
-        socialExecute("DELETE FROM social_comments WHERE post_id = ?", "i", array($postId));
-        socialExecute("DELETE FROM social_reactions WHERE post_id = ?", "i", array($postId));
-        socialExecute("DELETE FROM social_posts WHERE id = ?", "i", array($postId));
-        $tab = socialIsModerator() ? "moderation" : "feed";
-    } else if ($action == "delete_comment") {
-        $commentId = isset($_POST['comment_id']) && is_string($_POST['comment_id']) &&
-                ctype_digit($_POST['comment_id']) ? (int) $_POST['comment_id'] : 0;
-        $comment = socialFetchOne("SELECT username FROM social_comments WHERE id = ?", "i", array($commentId));
-        if (!$comment || ($comment['username'] != $username && !socialIsModerator())) {
-            header("HTTP/1.1 403 Forbidden");
-            die("Neturite teisės pašalinti šio komentaro.");
-        }
-        socialExecute("DELETE FROM social_comments WHERE id = ?", "i", array($commentId));
-        $tab = socialIsModerator() ? "moderation" : "feed";
-    } else if ($action == "delete_message") {
-        $messageId = isset($_POST['message_id']) && is_string($_POST['message_id']) &&
-                ctype_digit($_POST['message_id']) ? (int) $_POST['message_id'] : 0;
-        $message = socialFetchOne("SELECT sender, recipient FROM social_messages WHERE id = ?", "i", array($messageId));
-        if (!$message || ($message['sender'] != $username && $message['recipient'] != $username &&
-                !socialIsModerator())) {
-            header("HTTP/1.1 403 Forbidden");
-            die("Neturite teisės pašalinti šios žinutės.");
-        }
-        socialExecute("DELETE FROM social_messages WHERE id = ?", "i", array($messageId));
-        $tab = socialIsModerator() ? "moderation" : "messages";
-    } else {
-        header("HTTP/1.1 400 Bad Request");
-        die("Nežinomas veiksmas.");
-    }
+    $tab = socialDispatchAction($action, $username);
 
     header("Location: social.php?tab=" . urlencode($tab) . "&saved=1");
     exit;
