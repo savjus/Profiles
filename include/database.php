@@ -127,6 +127,7 @@ class MySQLDB {
             }
         }
         if ($alreadyMigrated && $schemaComplete) {
+            $this->ensureUniqueEmailIndex();
             return;
         }
 
@@ -157,7 +158,8 @@ class MySQLDB {
                 `first_name` varchar(80) NOT NULL DEFAULT '',
                 `last_name` varchar(80) NOT NULL DEFAULT '',
                 `bio` varchar(1000) NOT NULL DEFAULT '',
-                PRIMARY KEY (`username`)
+                PRIMARY KEY (`username`),
+                UNIQUE KEY `users_email` (`email`)
             ) ENGINE=MyISAM DEFAULT CHARSET=utf8",
             "CREATE TABLE IF NOT EXISTS `social_posts` (
                 `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
@@ -211,6 +213,7 @@ class MySQLDB {
                         . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
             }
         }
+        $this->ensureUniqueEmailIndex();
 
         $profileColumns = array(
             "first_name" => "varchar(80) NOT NULL DEFAULT ''",
@@ -267,12 +270,12 @@ class MySQLDB {
                         . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
             }
             $password = md5("demo");
-            $email = "demo@ktu.lt";
             foreach ($demoUsers as $user) {
                 $username = $user[0];
                 $userid = $user[1];
                 $userlevel = $user[2];
                 $timestamp = $user[3];
+                $email = strtolower($username) . "@ktu.lt";
                 if (!mysqli_stmt_bind_param($statement, "sssisi",
                         $username, $password, $userid, $userlevel, $email, $timestamp) ||
                         !mysqli_stmt_execute($statement)) {
@@ -296,6 +299,69 @@ class MySQLDB {
                     . htmlspecialchars(mysqli_stmt_error($migration), ENT_QUOTES, "UTF-8"));
         }
         mysqli_stmt_close($migration);
+    }
+
+    function ensureUniqueEmailIndex() {
+        $indexResult = mysqli_query($this->connection, "SHOW INDEX FROM `" . TBL_USERS . "`");
+        if (!$indexResult) {
+            die("Nepavyko patikrinti el. pašto apribojimo: "
+                    . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+        }
+        $indexes = array();
+        while ($index = mysqli_fetch_assoc($indexResult)) {
+            $keyName = $index['Key_name'];
+            if (!isset($indexes[$keyName])) {
+                $indexes[$keyName] = array("unique" => (int) $index['Non_unique'] === 0, "columns" => array());
+            }
+            $indexes[$keyName]["columns"][(int) $index['Seq_in_index']] = $index['Column_name'];
+        }
+        mysqli_free_result($indexResult);
+        foreach ($indexes as $index) {
+            ksort($index["columns"]);
+            if ($index["unique"] && array_values($index["columns"]) === array("email")) {
+                return;
+            }
+        }
+
+        $duplicates = mysqli_query($this->connection,
+                "SELECT `email` FROM `" . TBL_USERS . "` "
+                . "WHERE `email` IS NOT NULL GROUP BY `email` HAVING COUNT(*) > 1 LIMIT 1");
+        if (!$duplicates) {
+            die("Nepavyko patikrinti pasikartojančių el. pašto adresų: "
+                    . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+        }
+        $hasDuplicates = mysqli_num_rows($duplicates) > 0;
+        mysqli_free_result($duplicates);
+        if ($hasDuplicates) {
+            $message = "El. pašto adresų unikalumo apribojimas nepritaikytas: users lentelėje yra "
+                    . "pasikartojančių el. pašto adresų. Pataisykite pasikartojančius adresus ir "
+                    . "atnaujinkite puslapį.";
+            error_log($message);
+            die(htmlspecialchars($message, ENT_QUOTES, "UTF-8"));
+        }
+
+        if (isset($indexes["users_email"]) && !$indexes["users_email"]["unique"]) {
+            if (!mysqli_query($this->connection,
+                    "ALTER TABLE `" . TBL_USERS . "` DROP INDEX `users_email`")) {
+                die("Nepavyko atnaujinti el. pašto indekso: "
+                        . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+            }
+        }
+        if (!mysqli_query($this->connection,
+                "ALTER TABLE `" . TBL_USERS . "` ADD UNIQUE KEY `users_email` (`email`)")) {
+            $error = mysqli_error($this->connection);
+            $check = mysqli_query($this->connection,
+                    "SHOW INDEX FROM `" . TBL_USERS . "` WHERE `Key_name` = 'users_email'");
+            if ($check && mysqli_num_rows($check) > 0) {
+                mysqli_free_result($check);
+                return;
+            }
+            if ($check) {
+                mysqli_free_result($check);
+            }
+            die("Nepavyko pritaikyti el. pašto UNIQUE apribojimo: "
+                    . htmlspecialchars($error, ENT_QUOTES, "UTF-8"));
+        }
     }
 
     /**
@@ -371,6 +437,23 @@ class MySQLDB {
         $q = "SELECT username FROM " . TBL_USERS . " WHERE username = '$username'";
         $result = mysqli_query($this->connection, $q);
         return (mysqli_num_rows($result) > 0);
+    }
+
+    function emailTaken($email, $excludeUsername = "") {
+        $email = mysqli_real_escape_string($this->connection, $email);
+        $excludeUsername = mysqli_real_escape_string($this->connection, $excludeUsername);
+        $q = "SELECT username FROM " . TBL_USERS . " WHERE email = '$email'";
+        if ($excludeUsername !== "") {
+            $q .= " AND username <> '$excludeUsername'";
+        }
+        $result = mysqli_query($this->connection, $q);
+        if (!$result) {
+            die("Nepavyko patikrinti el. pašto adreso: "
+                    . htmlspecialchars(mysqli_error($this->connection), ENT_QUOTES, "UTF-8"));
+        }
+        $taken = mysqli_num_rows($result) > 0;
+        mysqli_free_result($result);
+        return $taken;
     }
 
     /**

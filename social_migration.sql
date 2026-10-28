@@ -5,6 +5,10 @@ ALTER TABLE `users`
   ADD COLUMN `last_name` varchar(80) NOT NULL DEFAULT '',
   ADD COLUMN `bio` varchar(1000) NOT NULL DEFAULT '';
 
+-- Before adding this index, give each existing user a distinct email address.
+ALTER TABLE `users`
+  ADD UNIQUE KEY `users_email` (`email`);
+
 CREATE TABLE IF NOT EXISTS `social_posts` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `username` varchar(30) NOT NULL,

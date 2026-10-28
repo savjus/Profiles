@@ -82,7 +82,8 @@ CREATE TABLE IF NOT EXISTS `users` (
   `first_name` varchar(80) NOT NULL DEFAULT '',
   `last_name` varchar(80) NOT NULL DEFAULT '',
   `bio` varchar(1000) NOT NULL DEFAULT '',
-  PRIMARY KEY (`username`)
+  PRIMARY KEY (`username`),
+  UNIQUE KEY `users_email` (`email`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 --
@@ -91,8 +92,8 @@ CREATE TABLE IF NOT EXISTS `users` (
 
 INSERT IGNORE INTO `users` (`username`, `password`, `userid`, `userlevel`, `email`, `timestamp`) VALUES
 ('Valdytojas', 'fe01ce2a7fbac8fafaed7c982a04e229', '7ed2b87b255a0348b61226bd7c2ed5b4', 5, 'demo@ktu.lt', 1330553708),
-('Administratorius', 'fe01ce2a7fbac8fafaed7c982a04e229', 'a2fe399900de341c39c632244eaf8483', 9, 'demo@ktu.lt', 1330553956),
-('Vartotojas', 'fe01ce2a7fbac8fafaed7c982a04e229', '9a47f4552955b91bcd8850d73b00e703', 1, 'demo@ktu.lt', 1330553730);
+('Administratorius', 'fe01ce2a7fbac8fafaed7c982a04e229', 'a2fe399900de341c39c632244eaf8483', 9, 'administratorius@ktu.lt', 1330553956),
+('Vartotojas', 'fe01ce2a7fbac8fafaed7c982a04e229', '9a47f4552955b91bcd8850d73b00e703', 1, 'vartotojas@ktu.lt', 1330553730);
 
 -- Social network data. Existing installations can run social_migration.sql once.
 CREATE TABLE IF NOT EXISTS `social_posts` (

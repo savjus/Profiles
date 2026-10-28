@@ -296,6 +296,8 @@ class Session {
             //        . "\.([a-z]{2,}){1}$";
            if (!(filter_var($subemail, FILTER_VALIDATE_EMAIL))) {
                 $form->setError($field, "* Klaidingas e-pašto adresas");
+            } else if ($database->emailTaken($subemail)) {
+                $form->setError($field, "* Toks el. pašto adresas jau naudojamas");
             }
             $subemail = stripslashes($subemail);
         }
@@ -371,9 +373,10 @@ class Session {
             //        . "@[a-z0-9-]+(\.[a-z0-9-]{1,})*"
             //        . "\.([a-z]{2,}){1}$";
            if (!(filter_var($subemail, FILTER_VALIDATE_EMAIL))) {
-
-                $form->setError($field, "* Neteisingas e-pašto adresas");
-            }
+               $form->setError($field, "* Neteisingas e-pašto adresas");
+           } else if ($database->emailTaken($subemail, $this->username)) {
+               $form->setError($field, "* Toks el. pašto adresas jau naudojamas");
+           }
             $subemail = stripslashes($subemail);
         }
 
@@ -382,14 +385,15 @@ class Session {
             return false;  //Errors with form
         }
 
+        /* Change Email */
+        if ($subemail && !$database->updateUserField($this->username, "email", $subemail)) {
+            $form->setError("email", "* Nepavyko išsaugoti el. pašto adreso");
+            return false;
+        }
+
         /* Update password since there were no errors */
         if ($subcurpass && $subnewpass) {
             $database->updateUserField($this->username, "password", md5($subnewpass));
-        }
-
-        /* Change Email */
-        if ($subemail) {
-            $database->updateUserField($this->username, "email", $subemail);
         }
 
         /* Success! */
