@@ -1,7 +1,7 @@
 table.meniu {
     text-align: left;
-    background-color:#F8E9FC;
-    border:3px dashed black;
+    background-color:#fff1b8;
+    border:3px dashed #b88a24;
 }
 
 table.center {
@@ -11,9 +11,9 @@ table.center {
     margin-top: 0px;
     border-width: 3px;
     border-style: solid;
-    border-color: grey;
+    border-color: #c9a34a;
     padding: 1px;
-    background-color: white;                
+    background-color: #fffaf0;
 }
 table.backlink {  
     margin-left:auto; 
@@ -22,17 +22,19 @@ table.backlink {
     margin-top: 0px;
     border-width: 13px;
     border-style: solid;
-    border-color: red;    
-    background-color: cyan;   
+    border-color: #c9a34a;
+    background-color: #fff1b8;
 }
 body {
     text-align:center;
+    color: #493a1e;
+    background-color: #fff8e6;
 }   
 form.login {
     margin-bottom:0;
     padding:6px; 
-    background-color:#FFF7B7; 
-    border:3px dashed grey;               
+    background-color:#fff1b8;
+    border:3px dashed #c9a34a;
 }
 input.s1 {   
     width:100%;
@@ -44,8 +46,8 @@ input.s1 {
     padding: 12px;
     max-width: 760px;
     text-align: left;
-    border: 1px solid #ccc;
-    background-color: #fffdf8;
+    border: 1px solid #dfc77f;
+    background-color: #fffaf0;
 }
 .social-card textarea {
     width: 98%;
@@ -58,7 +60,7 @@ input.s1 {
 .social-comment {
     margin: 8px 0;
     padding: 8px;
-    border-left: 3px solid #ddd;
+    border-left: 3px solid #dfc77f;
     text-align: left;
 }
 .social-notice {

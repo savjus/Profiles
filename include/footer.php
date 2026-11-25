@@ -8,7 +8,7 @@
 if (isset($database)) {
     echo ""
     . "<table width=100% "
-    . "style=\"padding:1px;background-color:#DCDCDC;border:1px dashed grey;\">\n"
+    . "style=\"padding:1px;background-color:#fff1b8;border:1px dashed #c9a34a;\">\n"
     . "<tr align=\"center\"><td>\n"
     . "<b>Registruotų vartotojų kiekis: </b> " . $database->getNumMembers() . ".&nbsp"
     . "<b>Dabar prisijungę: </b> " . $database->num_active_users . ".&nbsp"
